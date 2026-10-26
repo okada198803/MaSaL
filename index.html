@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>MaSaL</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* 構成：上部に対象（部隊・期間）の選択、タブで「部隊／個人／取り込み」。要領ごとのブロックを縦に並べ、PCでは表を横に広げる */
+  :root {
+    --bg: #f3f5f4; --panel: #ffffff; --panel2: #e8eceb; --line: #d3d9d7;
+    --fg: #17201e; --sub: #5d6a67; --accent: #0f7a70; --accent-fg: #ffffff;
+    --good: #23864b; --warn: #a96b00; --bad: #c0362c;
+    --good-bg: #dff1e5; --warn-bg: #f8ead0; --bad-bg: #f7dedb;
+    --f-body: -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "BIZ UDPGothic", "Yu Gothic UI", "Segoe UI", sans-serif;
+    --f-num: "SF Mono", "Menlo", "Consolas", ui-monospace, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg: #0c0f0f; --panel: #151a1a; --panel2: #1d2424; --line: #2a3333;
+    --fg: #e6ecea; --sub: #8d9a97; --accent: #4fd1c5; --accent-fg: #062320;
+    --good: #4ade80; --warn: #fbbf24; --bad: #f87171;
+    --good-bg: #12301f; --warn-bg: #3a2f0d; --bad-bg: #3a1616; color-scheme: dark; } }
+  :root[data-theme="dark"] {
+    --bg: #0c0f0f; --panel: #151a1a; --panel2: #1d2424; --line: #2a3333;
+    --fg: #e6ecea; --sub: #8d9a97; --accent: #4fd1c5; --accent-fg: #062320;
+    --good: #4ade80; --warn: #fbbf24; --bad: #f87171;
+    --good-bg: #12301f; --warn-bg: #3a2f0d; --bad-bg: #3a1616; color-scheme: dark; }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 14px; }
+  body { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: calc(10px + env(safe-area-inset-top, 0px)) calc(70px + env(safe-area-inset-bottom, 0px)); }
+  .wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+  button, select, input { font-family: inherit; font-size: 14px; }
+  button { background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 9px; padding: 9px 13px; cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 700; }
+  button.danger { color: var(--bad); border-color: var(--bad); }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  select, input[type=date] { background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 9px; padding: 8px; min-width: 0; }
+
+  header.top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .brand { font-size: 20px; font-weight: 800; letter-spacing: 0.04em; }
+  .brand small { font-size: 11px; font-weight: 500; color: var(--sub); letter-spacing: 0.02em; margin-left: 6px; }
+  .datainfo { font-size: 12px; color: var(--sub); font-variant-numeric: tabular-nums; }
+  .banner { font-size: 12px; background: var(--warn-bg); color: var(--fg); border: 1px solid var(--warn); border-radius: 9px; padding: 7px 10px; line-height: 1.45; }
+
+  .filters { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 8px; }
+  .filters label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--sub); min-width: 0; letter-spacing: 0.03em; }
+  @media (max-width: 560px) { .filters { grid-template-columns: 1fr 1fr; } .filters label:first-child { grid-column: 1 / -1; } }
+
+  .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex; background: var(--panel); border-top: 1px solid var(--line);
+    padding-bottom: env(safe-area-inset-bottom, 0px); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+  .tabs button { flex: 1; border: none; border-radius: 0; background: transparent; color: var(--sub); padding: 13px 4px; font-weight: 700; }
+  .tabs button[aria-selected="true"] { color: var(--accent); box-shadow: inset 0 3px 0 var(--accent); }
+
+  section.view[hidden] { display: none; }
+  .view { display: flex; flex-direction: column; gap: 12px; }
+  .block { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .block h2 { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; text-wrap: balance; }
+  .block h3 { margin: 0; font-size: 12px; color: var(--sub); font-weight: 700; letter-spacing: 0.04em; }
+  .meta { font-size: 12px; color: var(--sub); font-variant-numeric: tabular-nums; }
+  .hint { font-size: 11.5px; color: var(--sub); line-height: 1.5; margin: 0; }
+  .badge { font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 8px; border: 1px solid var(--line); color: var(--sub); white-space: nowrap; }
+  .badge.live { color: var(--bad); border-color: var(--bad); }
+  .badge.gbb { color: var(--warn); border-color: var(--warn); }
+  .badge.dry { color: var(--accent); border-color: var(--accent); }
+
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  @media (max-width: 560px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+  .kpi { background: var(--panel2); border-radius: 9px; padding: 8px 10px; }
+  .kpi .v { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .kpi .l { font-size: 11px; color: var(--sub); }
+
+  ul.issues { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  ul.issues li { display: grid; grid-template-columns: 8px 1fr; gap: 8px; font-size: 13px; line-height: 1.45; }
+  ul.issues li::before { content: ""; border-radius: 3px; background: var(--line); }
+  ul.issues li.s2::before { background: var(--bad); } ul.issues li.s1::before { background: var(--warn); } ul.issues li.s0::before { background: var(--good); }
+  ul.issues li .sub { color: var(--sub); font-size: 12px; }
+
+  .tbl { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  th { font-size: 11px; color: var(--sub); font-weight: 600; text-align: right; padding: 5px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { text-align: right; padding: 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; position: sticky; left: 0; background: var(--panel); }
+  td.nm { font-weight: 600; } td.nm small { display: block; font-weight: 400; color: var(--sub); font-size: 10.5px; }
+  tr.click { cursor: pointer; } tr.click:hover td { background: var(--panel2); }
+  .g { display: inline-block; min-width: 18px; text-align: center; border-radius: 4px; font-weight: 800; font-size: 11px; padding: 0 3px; margin-left: 3px; }
+  .s0 .g, .g.s0 { background: var(--good-bg); color: var(--good); }
+  .s1 .g, .g.s1 { background: var(--warn-bg); color: var(--warn); }
+  .s2 .g, .g.s2 { background: var(--bad-bg); color: var(--bad); }
+  td.s1 { color: var(--warn); } td.s2 { color: var(--bad); font-weight: 700; }
+  .tr { font-size: 10.5px; margin-left: 2px; } .tr.up { color: var(--good); } .tr.dn { color: var(--bad); }
+
+  .dist { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--panel2); min-width: 90px; }
+  .dist span { display: block; height: 100%; }
+  .dist .d0 { background: var(--good); } .dist .d1 { background: var(--warn); } .dist .d2 { background: var(--bad); }
+  .causes { display: flex; flex-direction: column; gap: 5px; }
+  .cause { display: grid; grid-template-columns: minmax(0, 13em) 1fr 4.5em; gap: 8px; align-items: center; font-size: 12px; }
+  .cause .bar { height: 9px; border-radius: 5px; background: var(--panel2); overflow: hidden; } .cause .bar i { display: block; height: 100%; background: var(--accent); }
+  .cause .n { text-align: right; font-variant-numeric: tabular-nums; color: var(--sub); }
+
+  .drop { border: 2px dashed var(--line); border-radius: 12px; padding: 18px; text-align: center; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .drop.over { border-color: var(--accent); background: var(--panel2); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .log { font-size: 12px; line-height: 1.6; font-variant-numeric: tabular-nums; }
+  .log .err { color: var(--bad); }
+  .confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; background: var(--bad-bg); border-radius: 9px; padding: 8px 10px; }
+  .hist { font-size: 12px; }
+  .sheet { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,0.55); display: flex; align-items: flex-end; justify-content: center; }
+  .sheet[hidden] { display: none; }
+  .sheet .body { background: var(--panel); border-radius: 14px 14px 0 0; width: 100%; max-width: 480px; padding: 14px max(16px, env(safe-area-inset-left, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 10px; }
+  .sheet .body .row button { flex: 1; }
+  .empty { text-align: center; padding: 24px 10px; color: var(--sub); line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">MaSaL<small>Marksmanship Synthesis &amp; Analysis Lab</small></div>
+    <div class="datainfo" id="dataInfo"></div>
+  </header>
+  <div class="banner" id="banner" hidden></div>
+  <div class="filters">
+    <label for="unitSel">部隊<select id="unitSel"></select></label>
+    <label for="dFrom">期間（開始）<input type="date" id="dFrom"></label>
+    <label for="dTo">期間（終了）<input type="date" id="dTo"></label>
+  </div>
+
+  <section class="view" id="vUnit"></section>
+  <section class="view" id="vPerson" hidden></section>
+  <section class="view" id="vImport" hidden>
+    <div class="block">
+      <h2>取り込み</h2>
+      <div class="drop" id="drop">
+        <div>MaLI・MaCo の「MaSaL出力」の JSON を選ぶ（複数可）</div>
+        <button class="primary" id="btnPick">ファイルを選ぶ</button>
+        <input type="file" id="fileIn" accept=".json,application/json" multiple hidden>
+        <p class="hint">iPhone：AirDrop で受け取ったファイルは「ファイル」アプリに保存してから選ぶ。PC：この枠にドラッグしても取り込める。同じ記録（ID）は新しい内容で置き換える。</p>
+      </div>
+      <div class="log" id="importLog"></div>
+    </div>
+    <div class="block">
+      <h2>書き出し</h2>
+      <div class="row">
+        <button id="btnExportJson">統合データ（JSON）</button>
+        <button id="btnExportCsv">部隊の集計（CSV）</button>
+      </div>
+      <p class="hint">統合データは MaSaL どうしの受け渡し用（iPhone で集めたデータを PC へ AirDrop する等）。CSV は表示中の部隊・期間の最新値で、Excel で開ける。</p>
+    </div>
+    <div class="block">
+      <h2>保存しているデータ</h2>
+      <div class="log" id="storeInfo"></div>
+      <div class="row"><button class="danger" id="btnClear">すべて削除</button></div>
+      <div id="clearConfirm"></div>
+      <p class="hint">データはこの端末のブラウザ内にだけ保存される（通信しない）。ブラウザのデータを消すと失われるため、統合データを書き出して保管すること。</p>
+    </div>
+  </section>
+</div>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" aria-selected="true" data-v="vUnit">部隊</button>
+  <button role="tab" aria-selected="false" data-v="vPerson">個人</button>
+  <button role="tab" aria-selected="false" data-v="vImport">取り込み</button>
+</nav>
+
+<div class="sheet" id="exSheet" hidden><div class="body">
+  <strong id="exName" style="word-break:break-all;"></strong>
+  <div class="meta" id="exNote"></div>
+  <div class="row"><button class="primary" id="exShare">共有・保存</button></div>
+  <div class="row"><button id="exDl">ダウンロード</button><button id="exCopy">コピー</button><button id="exClose">閉じる</button></div>
+  <div class="hint" id="exMsg"></div>
+</div></div>
+
+<script>
+'use strict';
+const MASAL_VERSION = 'MaSaL 2026-10-26';
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+// ===== 保存（IndexedDB。使えない環境ではメモリのみ） =====
+const DB = (() => {
+  let db = null;
+  const open = () => new Promise(res => {
+    try {
+      if (!window.indexedDB) return res(false);
+      const r = indexedDB.open('masal', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('records', { keyPath: 'id' });
+      r.onsuccess = () => { db = r.result; res(true); }; r.onerror = () => res(false);
+    } catch (e) { res(false); }
+  });
+  const tx = (mode, fn) => new Promise(res => {
+    if (!db) return res(null);
+    try { const t = db.transaction('records', mode); const rq = fn(t.objectStore('records')); t.oncomplete = () => res(rq ? rq.result : true); t.onerror = () => res(null); }
+    catch (e) { res(null); }
+  });
+  return { open, ok: () => !!db,
+    all: () => tx('readonly', s => s.getAll()),
+    putMany: (list) => tx('readwrite', s => { list.forEach(r => s.put(r)); return null; }),
+    clear: () => tx('readwrite', s => s.clear()) };
+})();
+
+// ===== 要領・条件 =====
+// MaLI と MaCo で同じ射撃要領は同じキーにそろえる（比較は同じ要領・同じ火器区分どうし）
+const SCEN = {
+  posture: { label: '至近射撃（姿勢変換）', order: 1 },
+  day: { label: '制圧致命射撃（昼間）', order: 2 },
+  night: { label: '制圧致命射撃（夜間）', order: 3 },
+  t1: { label: '1コ的', order: 4 },
+  t3: { label: '3コ的', order: 5 },
+  free: { label: '自由練成', order: 6 },
+};
+const SCEN_ALIAS = { posture: 'posture', m_posture: 'posture', suppress_day: 'day', m_day: 'day', suppress_night: 'night', m_night: 'night', t1: 't1', t3: 't3', free: 'free' };
+const WEAPON = { live: { label: '実弾', order: 1 }, gbb: { label: 'GBB', order: 2 }, dry: { label: 'ドライ', order: 3 } };
+function scenOf(r) {
+  const s = (r.condition && r.condition.scenario) || {}; const k = SCEN_ALIAS[s.key || (r.type === 'free' ? 'free' : '')];
+  if (k) return { key: k, label: SCEN[k].label, order: SCEN[k].order };
+  const lbl = String(s.label || s.key || 'カスタム').replace(/・(ドライ|GBB)$/, '').replace(/（[^）]*）$/, '').trim() || 'カスタム';
+  return { key: 'c:' + lbl, label: lbl, order: 9 };
+}
+function weaponOf(r) { const w = r.condition && r.condition.weapon; return WEAPON[w] ? w : (r.app === 'MaLI' ? 'live' : 'dry'); }
+function groupOf(r) {
+  const s = scenOf(r), w = weaponOf(r);
+  return { key: `${s.key}|${w}|${r.app}`, scen: s, weapon: w, app: r.app, order: s.order * 100 + WEAPON[w].order * 10 + (r.app === 'MaLI' ? 0 : 1) };
+}
+function shooterKey(sh) { sh = sh || {}; return sh.code ? 'c:' + sh.code : 'n:' + (sh.name || '（未設定）'); }
+function dateOf(r) { return (r.eventDate || (r.start || '').slice(0, 10) || ''); }
+function fmtDate(r) { const d = dateOf(r); return d ? +d.slice(5, 7) + '/' + +d.slice(8, 10) : '--'; }
+
+// ===== 指標 =====
+// dir: -1 小さいほど良い / +1 大きいほど良い / 0 方向なし。st: 0 良 / 1 注意 / 2 要指導（評価 A・B / C / D、予測点の帯 高 / 中 / 低）
+const MET = [
+  ['score', '予測点', '点', +1, 0], ['hits', '命中', '', +1, 0], ['grouping', '散布界', 'cm', -1, 1],
+  ['first', '初弾', '秒', -1, 2], ['split', '射撃間隔', '秒', -1, 2], ['total', '合計時間', '秒', -1, 2], ['reload', '弾倉交換', '秒', -1, 2],
+  ['malfunction', '弾づまり対処', '秒', -1, 2], ['inTime', '時間内', '%', +1, 0], ['react', '反応', '秒', -1, 2],
+  ['headshot', '頭部', '', 0, -1], ['exposure', '暴露', '', 0, -1], ['adapt', '適応', '', 0, -1],
+  ['sd', 'ばらつき', '点', -1, 0], ['cant', '傾き', '°', -1, 1],
+].map(([k, label, unit, dir, dp]) => ({ k, label, unit, dir, dp }));
+const METK = Object.fromEntries(MET.map(m => [m.k, m]));
+const G2S = { A: 0, B: 0, C: 1, D: 2 };
+const num = (v) => typeof v === 'number' && isFinite(v) ? v : null;
+const scoreSt = (v) => v == null ? null : v >= 88 ? 0 : v >= 72 ? 1 : 2;
+function mk(v, g, st, disp) { return { v: num(v), g: g || null, st: st != null ? st : (g && G2S[g] != null ? G2S[g] : null), disp }; }
+function extract(r) {
+  const s = r.summary || {}, gr = s.grades || {}, go = s.goals || {}, o = {};
+  if (r.app === 'MaLI') {
+    o.first = mk(s.firstS, gr.first); o.split = mk(s.splitS, gr.split); o.total = mk(s.totalS, gr.total);
+    if (s.reloadS != null || gr.reload) o.reload = mk(s.reloadS, gr.reload);
+    if (s.hits != null) o.hits = mk(s.shots ? s.hits / s.shots * 100 : null, gr.hits, null, `${s.hits}/${s.shots}`);
+    if (s.groupingCm != null || gr.grouping) o.grouping = mk(s.groupingCm, gr.grouping);
+    if (s.malfunctionS != null) o.malfunction = mk(s.malfunctionS, gr.malfunction);
+    ['headshot', 'exposure', 'adapt'].forEach(k => { if (gr[k]) o[k] = mk(null, gr[k]); });
+    o._goals = { first: go.firstS, split: go.splitS, total: go.totalS, reload: go.reloadS, grouping: go.groupingCm, hits: go.hits };
+  } else if (r.type === 'drill' && s.plannedShots != null) {      // MaCo 連続（MaLI の要領）
+    o.score = mk(s.scoreMean, null, scoreSt(num(s.scoreMean)));
+    o.first = mk(s.firstS, gr.first); o.split = mk(s.splitS, gr.split); o.total = mk(s.totalS, gr.total);
+    if (s.reloadS != null || gr.reload) o.reload = mk(s.reloadS, gr.reload);
+    if (s.malfunctionS != null) o.malfunction = mk(s.malfunctionS);
+    o._goals = { first: go.first, split: go.split, total: go.total, reload: go.reload };
+  } else if (r.type === 'drill') {                                 // MaCo 反復（1コ的・3コ的など）
+    o.score = mk(s.scoreMean, null, scoreSt(num(s.scoreMean)));
+    const it = s.reps ? s.inTime / s.reps * 100 : null; o.inTime = mk(it, null, it == null ? null : it >= 100 ? 0 : it >= 75 ? 1 : 2, s.reps ? `${s.inTime}/${s.reps}` : null);
+    o.react = mk(s.reactMeanS); const c = num(s.cantMaxDeg); o.cant = mk(c == null ? null : Math.abs(c), null, c == null ? null : Math.abs(c) >= 3 ? 1 : 0);
+    o._goals = { react: s.parS };
+  } else {                                                         // MaCo 自由練成
+    o.score = mk(s.scoreMean, null, scoreSt(num(s.scoreMean))); o.sd = mk(s.scoreSd);
+    const c = num(s.cantMeanDeg); o.cant = mk(c == null ? null : Math.abs(c), null, c == null ? null : Math.abs(c) >= 3 ? 1 : 0);
+    o._goals = {};
+  }
+  return o;
+}
+function fmtVal(k, m) {
+  if (!m) return '--'; if (m.disp) return m.disp; const d = METK[k];
+  if (m.v == null) return m.g ? '' : '--';
+  return d.dp >= 0 ? m.v.toFixed(d.dp) : '';
+}
+function cellHtml(k, m, prev) {
+  if (!m) return '<td>--</td>';
+  const st = m.st == null ? '' : 's' + m.st;
+  return `<td class="${st}">${esc(fmtVal(k, m))}${m.g ? `<span class="g">${m.g}</span>` : (m.st != null && k === 'score' ? `<span class="g">${['高', '中', '低'][m.st]}</span>` : '')}${trendHtml(k, m, prev)}</td>`;
+}
+// 前回からの変化（値の方向で良化・悪化を判定。小さな変化は表示しない）
+function trendOf(k, m, prev) {
+  const d = METK[k]; if (!d.dir || !m || !prev || m.v == null || prev.v == null) return 0;
+  const diff = (m.v - prev.v) * d.dir, base = Math.max(Math.abs(prev.v), 1e-6);
+  const tol = k === 'score' ? 5 : k === 'inTime' || k === 'hits' ? 5 : base * 0.08;
+  return diff > tol ? 1 : diff < -tol ? -1 : 0;
+}
+function trendHtml(k, m, prev) { const t = trendOf(k, m, prev); return t > 0 ? '<span class="tr up">▲</span>' : t < 0 ? '<span class="tr dn">▼</span>' : ''; }
+
+// MaCo の発ごとの低下要因（中・低の発、要確認・時間外・連射・超過を除く）
+function causeShots(r) {
+  if (r.app !== 'MaCo') return { all: 0, list: [] };
+  const ok = (r.shots || []).filter(s => s.quality !== 'suspect' && s.score != null && !s.late && !s.rapid && !s.extra);
+  const list = ok.filter(s => s.band && s.band !== '高' && s.cause && s.cause.key && !['none', 'small'].includes(s.cause.key)).map(s => s.cause.label || s.cause.key);
+  return { all: ok.length, low: ok.filter(s => s.band && s.band !== '高').length, list };
+}
+
+// ===== 状態 =====
+let records = new Map(), sampleMode = false, view = lsGet('masal_view') || 'vUnit';
+let unitSel = lsGet('masal_unit') || '', dFrom = lsGet('masal_from') || '', dTo = lsGet('masal_to') || '', personSel = lsGet('masal_person') || '';
+
+function allRecords() { return [...records.values()]; }
+function inPeriod(r) { const d = dateOf(r); return (!dFrom || d >= dFrom) && (!dTo || d <= dTo); }
+// 射手の一覧（所属は最新の記録のもの）
+function shooterIndex() {
+  const m = new Map();
+  allRecords().sort((a, b) => (a.start || '').localeCompare(b.start || '')).forEach(r => {
+    const k = shooterKey(r.shooter), sh = r.shooter || {};
+    const e = m.get(k) || { key: k, code: '', name: '', unit: '', n: 0, apps: new Set(), last: '' };
+    e.code = sh.code || e.code; e.name = sh.name || e.name; if (sh.unit) e.unit = sh.unit; e.n++; e.apps.add(r.app); e.last = dateOf(r) || e.last;
+    m.set(k, e);
+  });
+  return m;
+}
+function inUnit(unit) { return !unitSel || unit === unitSel || (unit || '').startsWith(unitSel + '/'); }
+function shooterLabel(e) { return [e.code, e.name].filter(Boolean).join(' ') || '（未設定）'; }
+
+// ===== 部隊の選択肢 =====
+function renderUnitSel(idx) {
+  const cnt = new Map(); idx.forEach(e => { const parts = (e.unit || '（所属なし）').split('/').map(x => x.trim()).filter(Boolean);
+    for (let i = 1; i <= parts.length; i++) { const p = parts.slice(0, i).join('/'); cnt.set(p, (cnt.get(p) || 0) + 1); } });
+  const paths = [...cnt.keys()].sort((a, b) => a.localeCompare(b, 'ja', { numeric: true }));
+  if (unitSel && !cnt.has(unitSel)) unitSel = '';
+  $('unitSel').innerHTML = `<option value="">全体（${idx.size}名）</option>` + paths.map(p => { const d = p.split('/').length - 1;
+    return `<option value="${esc(p)}" ${p === unitSel ? 'selected' : ''}>${'　'.repeat(d)}${esc(p.split('/').pop())}（${cnt.get(p)}名）</option>`; }).join('');
+}
+
+// ===== 集計の中心：要領グループ × 射手 =====
+function buildGroups(idx) {
+  const groups = new Map();
+  allRecords().filter(inPeriod).forEach(r => {
+    const sk = shooterKey(r.shooter), e = idx.get(sk); if (!e || !inUnit(e.unit || '（所属なし）')) return;
+    const g = groupOf(r); if (!groups.has(g.key)) groups.set(g.key, Object.assign(g, { by: new Map(), recs: [] }));
+    const G = groups.get(g.key); G.recs.push(r); if (!G.by.has(sk)) G.by.set(sk, []); G.by.get(sk).push(r);
+  });
+  groups.forEach(G => {
+    G.by.forEach(list => list.sort((a, b) => (a.start || '').localeCompare(b.start || '')));
+    G.rows = [...G.by.entries()].map(([sk, list]) => {
+      const latest = list[list.length - 1], prev = list.length > 1 ? list[list.length - 2] : null;
+      const m = extract(latest), pm = prev ? extract(prev) : null;
+      const cs = list.map(causeShots), cl = cs.flatMap(c => c.list), call = cs.reduce((a, c) => a + c.all, 0);
+      return { sk, e: idx.get(sk), list, latest, m, pm, causes: cl, causeAll: call, gun: (latest.condition && latest.condition.gun) || '' };
+    }).sort((a, b) => (a.e.unit || '').localeCompare(b.e.unit || '', 'ja', { numeric: true }) || shooterLabel(a.e).localeCompare(shooterLabel(b.e), 'ja', { numeric: true }));
+    G.mets = MET.filter(d => G.rows.some(r => r.m[d.k]));
+    G.goals = G.rows.length ? (G.rows[G.rows.length - 1].m._goals || {}) : {};
+  });
+  return [...groups.values()].sort((a, b) => a.order - b.order);
+}
+const avg = (a) => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+function countBy(list) { const m = new Map(); list.forEach(x => m.set(x, (m.get(x) || 0) + 1)); return [...m.entries()].sort((a, b) => b[1] - a[1]); }
+
+// 部隊の問題点：指標ごとの注意・要指導の人数、低下要因の割合
+function unitIssues(G) {
+  const out = [];
+  G.mets.forEach(d => {
+    const rows = G.rows.filter(r => r.m[d.k] && r.m[d.k].st != null); if (!rows.length) return;
+    const n1 = rows.filter(r => r.m[d.k].st === 1).length, n2 = rows.filter(r => r.m[d.k].st === 2).length; if (!n1 && !n2) return;
+    const vals = rows.map(r => r.m[d.k].v).filter(v => v != null), a = avg(vals), goal = num(G.goals[d.k]);
+    const names = rows.filter(r => r.m[d.k].st >= 1).sort((x, y) => y.m[d.k].st - x.m[d.k].st).map(r => shooterLabel(r.e) + (r.m[d.k].st === 2 ? '★' : ''));
+    out.push({ s: n2 / rows.length >= 0.25 || (n1 + n2) / rows.length >= 0.5 ? 2 : 1, rate: (n1 + n2 + n2) / rows.length,
+      html: `${esc(d.label)}：${d.k === 'score' ? '中・低' : d.k === 'inTime' || d.k === 'cant' ? '基準外' : 'C・D'} ${n1 + n2}/${rows.length}名` +
+        (a != null && d.dp >= 0 && d.k !== 'hits' ? `（平均 ${a.toFixed(d.dp)}${d.unit}${goal ? `・目標 ${goal}${d.unit}` : ''}）` : '') +
+        `<div class="sub">${esc(names.join('、'))}</div>` });
+  });
+  const cl = G.rows.flatMap(r => r.causes);
+  if (cl.length) {
+    const top = countBy(cl)[0], who = G.rows.filter(r => r.causes.length && countBy(r.causes)[0][0] === top[0]).map(r => shooterLabel(r.e));
+    const share = top[1] / cl.length;
+    out.push({ s: share >= 0.3 ? 2 : 1, rate: share, html: `低下要因の最多：${esc(top[0])} ${Math.round(share * 100)}%（中・低の発 ${cl.length}発中 ${top[1]}発）<div class="sub">最多の要因がこれの射手：${esc(who.join('、') || 'なし')}</div>` });
+  }
+  return out.sort((a, b) => b.s - a.s || b.rate - a.rate);
+}
+// 前回からの変化（2回以上の記録がある射手）
+function unitTrend(G) {
+  let up = 0, dn = 0, n = 0;
+  G.rows.forEach(r => { if (!r.pm) return; n++; let t = 0; G.mets.forEach(d => t += trendOf(d.k, r.m[d.k], r.pm[d.k])); if (t > 0) up++; else if (t < 0) dn++; });
+  return { up, dn, n };
+}
+
+function groupHead(G) {
+  return `<h2>${esc(G.scen.label)}<span class="badge ${G.weapon}">${WEAPON[G.weapon].label}</span><span class="badge">${G.app}</span></h2>`;
+}
+function distHtml(rows, k) {
+  const st = rows.map(r => r.m[k] && r.m[k].st).filter(s => s != null); if (!st.length) return '';
+  const c = [0, 1, 2].map(i => st.filter(s => s === i).length);
+  return `<div class="dist" title="良${c[0]}・注意${c[1]}・要指導${c[2]}">${c.map((n, i) => n ? `<span class="d${i}" style="width:${n / st.length * 100}%"></span>` : '').join('')}</div>`;
+}
+function causesHtml(list, max) {
+  if (!list.length) return '';
+  const cs = countBy(list).slice(0, max || 6);
+  return `<div class="causes">${cs.map(([l, n]) => `<div class="cause"><span>${esc(l)}</span><span class="bar"><i style="width:${n / list.length * 100}%"></i></span><span class="n">${n}発 ${Math.round(n / list.length * 100)}%</span></div>`).join('')}</div>`;
+}
+
+// ===== 部隊ビュー =====
+function renderUnit(idx) {
+  const el = $('vUnit'), groups = buildGroups(idx);
+  const members = [...idx.values()].filter(e => inUnit(e.unit || '（所属なし）'));
+  if (!groups.length) { el.innerHTML = `<div class="block empty">${records.size ? 'この部隊・期間の記録はありません。' : '記録がありません。「取り込み」から MaLI・MaCo の MaSaL出力（JSON）を取り込んでください。'}</div>`; return; }
+  const recN = groups.reduce((a, G) => a + G.recs.length, 0), active = new Set(groups.flatMap(G => G.rows.map(r => r.sk)));
+  const issueN = groups.reduce((a, G) => a + unitIssues(G).filter(x => x.s === 2).length, 0);
+  let h = `<div class="kpis"><div class="kpi"><div class="v">${active.size}<small style="font-size:12px;color:var(--sub)">/${members.length}</small></div><div class="l">記録のある射手</div></div>
+    <div class="kpi"><div class="v">${groups.length}</div><div class="l">要領（火器区分別）</div></div>
+    <div class="kpi"><div class="v">${recN}</div><div class="l">記録</div></div>
+    <div class="kpi"><div class="v" style="color:${issueN ? 'var(--bad)' : 'var(--good)'}">${issueN}</div><div class="l">重点の問題点</div></div></div>`;
+  groups.forEach(G => {
+    const iss = unitIssues(G), tr = unitTrend(G);
+    h += `<div class="block">${groupHead(G)}
+      <div class="meta">${G.rows.length}名・${G.recs.length}件${tr.n ? ` ／ 前回から 良化 ${tr.up}名・悪化 ${tr.dn}名（2回以上 ${tr.n}名）` : ''}</div>
+      <h3>問題点</h3>${iss.length ? `<ul class="issues">${iss.map(x => `<li class="s${x.s}"><div>${x.html}</div></li>`).join('')}</ul>` : '<ul class="issues"><li class="s0"><div>基準外の指標はありません。</div></li></ul>'}
+      ${G.app === 'MaCo' && G.rows.some(r => r.causes.length) ? `<h3>低下要因（中・低の発）</h3>${causesHtml(G.rows.flatMap(r => r.causes))}` : ''}
+      <h3>射手ごとの最新</h3>
+      <div class="tbl"><table><thead><tr><th>射手</th><th>回数</th>${G.mets.map(d => `<th>${esc(d.label)}${d.unit ? `(${esc(d.unit)})` : ''}</th>`).join('')}${G.app === 'MaCo' ? '<th>主な低下要因</th>' : ''}</tr></thead><tbody>
+      ${G.rows.map(r => `<tr class="click" data-sk="${esc(r.sk)}"><td class="nm">${esc(shooterLabel(r.e))}<small>${esc((r.e.unit || '').split('/').slice(-1)[0])}・${fmtDate(r.latest)}${r.gun ? '・' + esc(r.gun) : ''}</small></td><td>${r.list.length}</td>` +
+        G.mets.map(d => cellHtml(d.k, r.m[d.k], r.pm && r.pm[d.k])).join('') +
+        (G.app === 'MaCo' ? `<td>${r.causes.length ? esc(countBy(r.causes)[0][0]) + ` <span class="meta">${countBy(r.causes)[0][1]}/${r.causes.length}</span>` : '--'}</td>` : '') + '</tr>').join('')}
+      <tr><td class="nm">分布</td><td></td>${G.mets.map(d => `<td>${distHtml(G.rows, d.k)}</td>`).join('')}${G.app === 'MaCo' ? '<td></td>' : ''}</tr>
+      </tbody></table></div>
+    </div>`;
+  });
+  h += `<p class="hint">各射手の期間内で最新の記録を表示（▲▼は前回の記録からの良化・悪化）。評価 A・B＝良、C＝注意（黄）、D＝要指導（赤）。予測点（MaCo）は高 88点以上・中 72点以上・低。★は要指導。予測点と命中・散布は尺度が違うため合算しない。行をタップすると個人の画面へ。</p>`;
+  el.innerHTML = h;
+  el.querySelectorAll('tr.click').forEach(tr => tr.onclick = () => { personSel = tr.dataset.sk; lsSet('masal_person', personSel); showView('vPerson'); });
+}
+
+// ===== 個人ビュー =====
+function renderPerson(idx) {
+  const el = $('vPerson'), list = [...idx.values()].filter(e => inUnit(e.unit || '（所属なし）'))
+    .sort((a, b) => (a.unit || '').localeCompare(b.unit || '', 'ja', { numeric: true }) || shooterLabel(a).localeCompare(shooterLabel(b), 'ja', { numeric: true }));
+  if (!list.length) { el.innerHTML = '<div class="block empty">この部隊の射手はいません。</div>'; return; }
+  if (!list.find(e => e.key === personSel)) personSel = list[0].key;
+  const e = idx.get(personSel);
+  const recs = allRecords().filter(r => shooterKey(r.shooter) === personSel && inPeriod(r));
+  const groups = new Map(); recs.forEach(r => { const g = groupOf(r); if (!groups.has(g.key)) groups.set(g.key, Object.assign(g, { list: [] })); groups.get(g.key).list.push(r); });
+  const gl = [...groups.values()].sort((a, b) => a.order - b.order); gl.forEach(G => G.list.sort((a, b) => (a.start || '').localeCompare(b.start || '')));
+  // 個人の問題点（各要領の最新の記録で注意・要指導の指標、MaCoの低下要因）
+  const issues = [];
+  gl.forEach(G => {
+    const m = extract(G.list[G.list.length - 1]), pm = G.list.length > 1 ? extract(G.list[G.list.length - 2]) : null;
+    MET.forEach(d => { const x = m[d.k]; if (x && x.st >= 1) issues.push({ s: x.st, html: `${esc(G.scen.label)}（${WEAPON[G.weapon].label}）：${esc(d.label)} ${esc(fmtVal(d.k, x))}${d.unit && x.v != null && !x.disp ? esc(d.unit) : ''}${x.g ? ` <span class="g s${x.st}">${x.g}</span>` : ''}` +
+      (num(m._goals && m._goals[d.k]) ? `<span class="sub">（目標 ${m._goals[d.k]}${esc(d.unit)}）</span>` : '') + (pm && trendOf(d.k, x, pm[d.k]) ? (trendOf(d.k, x, pm[d.k]) > 0 ? ' <span class="tr up">前回より良化</span>' : ' <span class="tr dn">前回より悪化</span>') : '') }); });
+    const cl = G.list.flatMap(r => causeShots(r).list);
+    if (cl.length >= 3) { const t = countBy(cl)[0]; issues.push({ s: t[1] / cl.length >= 0.4 ? 2 : 1, html: `${esc(G.scen.label)}（${WEAPON[G.weapon].label}）：低下要因 ${esc(t[0])} ${t[1]}/${cl.length}発` }); }
+  });
+  issues.sort((a, b) => b.s - a.s);
+  let h = `<div class="block"><div class="row" style="align-items:center;"><label for="personSel" class="meta">射手</label><select id="personSel" style="flex:1;">${list.map(x => `<option value="${esc(x.key)}" ${x.key === personSel ? 'selected' : ''}>${esc(shooterLabel(x))}（${esc(x.unit || '所属なし')}）</option>`).join('')}</select></div>
+    <h2>${esc(shooterLabel(e))}</h2><div class="meta">${esc(e.unit || '所属なし')} ／ 記録 ${recs.length}件（期間内）／ ${[...e.apps].join('・')}${e.code ? '' : ' ／ 記号なし（氏名で結び付け）'}</div>
+    <h3>問題点（各要領の最新）</h3>${issues.length ? `<ul class="issues">${issues.map(x => `<li class="s${x.s}"><div>${x.html}</div></li>`).join('')}</ul>` : '<ul class="issues"><li class="s0"><div>基準外の指標はありません。</div></li></ul>'}</div>`;
+  if (!gl.length) h += '<div class="block empty">期間内の記録はありません。</div>';
+  gl.forEach(G => {
+    const mets = MET.filter(d => G.list.some(r => extract(r)[d.k])), cl = G.list.flatMap(r => causeShots(r).list);
+    h += `<div class="block">${groupHead(G)}<div class="tbl"><table><thead><tr><th>日付</th>${mets.map(d => `<th>${esc(d.label)}${d.unit ? `(${esc(d.unit)})` : ''}</th>`).join('')}<th>火器</th></tr></thead><tbody>` +
+      G.list.slice().reverse().map((r, i, arr) => { const m = extract(r), pm = arr[i + 1] ? extract(arr[i + 1]) : null;
+        return `<tr><td>${fmtDate(r)}${r.eventName ? `<small class="meta" style="display:block">${esc(r.eventName)}</small>` : ''}</td>${mets.map(d => cellHtml(d.k, m[d.k], pm && pm[d.k])).join('')}<td>${esc((r.condition && r.condition.gun) || '')}</td></tr>`; }).join('') +
+      `</tbody></table></div>${cl.length ? `<h3>低下要因（中・低の発、期間内 ${cl.length}発）</h3>${causesHtml(cl)}` : ''}</div>`;
+  });
+  el.innerHTML = h;
+  $('personSel').onchange = (ev) => { personSel = ev.target.value; lsSet('masal_person', personSel); render(); };
+}
+
+// ===== 取り込み =====
+function validRecord(r) { return r && typeof r.id === 'string' && (r.app === 'MaLI' || r.app === 'MaCo') && r.shooter && typeof r.start === 'string'; }
+async function importFiles(files) {
+  const log = [], add = [];
+  for (const f of files) {
+    try {
+      const j = JSON.parse(await f.text());
+      if (j.format !== 'masal-exchange') { log.push(`<div class="err">${esc(f.name)}：MaSaL交換形式ではありません</div>`); continue; }
+      if (j.version !== 1) log.push(`<div class="err">${esc(f.name)}：版 ${esc(j.version)}（v1 として読み込みます）</div>`);
+      const recs = (j.records || []).filter(validRecord), bad = (j.records || []).length - recs.length;
+      let nNew = 0, nUpd = 0, nSame = 0;
+      recs.forEach(r => { const old = records.get(r.id) || add.find(x => x.id === r.id); if (!old) nNew++; else if (JSON.stringify(old) === JSON.stringify(r)) nSame++; else nUpd++; add.push(r); });
+      log.push(`<div>${esc(f.name)}（${esc((j.source && j.source.app) || '?')}）：新規 ${nNew}・更新 ${nUpd}・同一 ${nSame}${bad ? `・不正 ${bad}` : ''}</div>`);
+    } catch (e) { log.push(`<div class="err">${esc(f.name)}：読み込めません（${esc(e.message)}）</div>`); }
+  }
+  if (add.length) {
+    if (sampleMode) { records.clear(); sampleMode = false; }
+    add.forEach(r => records.set(r.id, r)); await DB.putMany(add);
+  }
+  $('importLog').innerHTML = log.join('') + (add.length ? `<div>取り込み後：${records.size}件</div>` : '');
+  render();
+}
+
+// ===== 書き出し =====
+let pending = null;
+function openExport(name, text, mime, note) {
+  pending = { name, text, mime }; $('exName').textContent = name; $('exNote').textContent = `${note}（${Math.max(1, Math.round(text.length / 1024))}KB）`; $('exMsg').textContent = ''; $('exSheet').hidden = false;
+}
+async function exShare() {
+  if (!pending) return;
+  try { const f = new File([pending.text], pending.name, { type: pending.mime });
+    if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: pending.name }); $('exMsg').textContent = '共有しました。'; return; }
+    $('exMsg').textContent = 'この環境ではファイルの共有ができません。「ダウンロード」か「コピー」を使ってください。';
+  } catch (e) { $('exMsg').textContent = e && e.name === 'AbortError' ? '共有を取り消しました。' : '共有できませんでした（' + (e && e.name) + '）。'; }
+}
+function exDownload() {
+  if (!pending) return; const url = URL.createObjectURL(new Blob([pending.text], { type: pending.mime })), a = document.createElement('a');
+  a.href = url; a.download = pending.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+  $('exMsg').textContent = 'ダウンロードを開始しました（環境によっては保存されません）。';
+}
+async function exCopy() { if (!pending) return; try { await navigator.clipboard.writeText(pending.text); $('exMsg').textContent = 'コピーしました。'; } catch (e) { $('exMsg').textContent = 'コピーできませんでした。'; } }
+function exportJson() {
+  const recs = allRecords().filter(r => !r.id.startsWith('SAMPLE:')); if (!recs.length) { $('importLog').textContent = '書き出せる記録がありません（サンプルは書き出しません）。'; return; }
+  const seen = new Set(), shooters = []; recs.forEach(r => { const k = shooterKey(r.shooter); if (!seen.has(k)) { seen.add(k); shooters.push(r.shooter); } });
+  const text = JSON.stringify({ format: 'masal-exchange', version: 1, source: { app: 'MaSaL', appVersion: MASAL_VERSION, exportedAt: new Date().toISOString() }, shooters, records: recs });
+  openExport(`masal_MaSaL_all_${new Date().toISOString().slice(0, 10)}.json`, text, 'application/json', `記録 ${recs.length}件・射手 ${shooters.length}名`);
+}
+function exportCsv() {
+  const groups = buildGroups(shooterIndex()); if (!groups.length) { $('importLog').textContent = '表示中の部隊・期間に記録がありません。'; return; }
+  const q = (v) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const head = ['要領', '火器区分', 'アプリ', '記号', '氏名', '所属', '日付', '回数', '火器'].concat(MET.flatMap(d => [d.label + (d.unit ? `(${d.unit})` : ''), d.label + '評価'])).concat(['主な低下要因', '低下要因の発数', '中・低の発数']);
+  const lines = [head.map(q).join(',')];
+  groups.forEach(G => G.rows.forEach(r => {
+    const top = r.causes.length ? countBy(r.causes)[0] : null;
+    lines.push([G.scen.label, WEAPON[G.weapon].label, G.app, r.e.code, r.e.name, r.e.unit, dateOf(r.latest), r.list.length, r.gun]
+      .concat(MET.flatMap(d => { const m = r.m[d.k]; return m ? [m.disp || (m.v != null && d.dp >= 0 ? m.v.toFixed(d.dp) : ''), m.g || (d.k === 'score' && m.st != null ? ['高', '中', '低'][m.st] : m.st != null ? ['良', '注意', '要指導'][m.st] : '')] : ['', '']; }))
+      .concat([top ? top[0] : '', top ? top[1] : '', r.causes.length]).map(q).join(','));
+  }));
+  const u = (unitSel || '全体').replace(/[\/\s]/g, '_');
+  openExport(`masal_${u}_${new Date().toISOString().slice(0, 10)}.csv`, '﻿' + lines.join('\r\n'), 'text/csv', `${lines.length - 1}行（射手×要領）`);
+}
+
+// ===== 表示 =====
+function renderStore() {
+  const recs = allRecords(), apps = countBy(recs.map(r => r.app)), idx = shooterIndex();
+  const ds = recs.map(dateOf).filter(Boolean).sort();
+  $('storeInfo').innerHTML = sampleMode ? 'サンプル表示中（保存していません）。取り込むとサンプルは消えます。'
+    : `${recs.length}件（${apps.map(([a, n]) => `${a} ${n}`).join('・') || 'なし'}）・射手 ${idx.size}名${ds.length ? `・${ds[0]}〜${ds[ds.length - 1]}` : ''}${DB.ok() ? '' : '<div class="err">この環境では端末に保存できません（画面を閉じると消えます）。</div>'}`;
+  $('dataInfo').textContent = sampleMode ? 'サンプル' : `${recs.length}件・${idx.size}名`;
+  $('banner').hidden = !sampleMode;
+  $('banner').innerHTML = 'サンプルデータを表示しています（架空の射手）。「取り込み」で MaLI・MaCo の JSON を取り込むと置き換わります。';
+}
+function render() {
+  const idx = shooterIndex(); renderUnitSel(idx); renderStore();
+  if (view === 'vUnit') renderUnit(idx); else if (view === 'vPerson') renderPerson(idx);
+}
+function showView(v) {
+  view = v; lsSet('masal_view', v);
+  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.v === v)));
+  ['vUnit', 'vPerson', 'vImport'].forEach(id => $(id).hidden = id !== v);
+  render(); window.scrollTo(0, 0);
+}
+
+// ===== サンプル（記録が無いときの表示確認用。保存しない） =====
+function makeSample() {
+  let seed = 20261026; const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const nrm = (m, s) => m + s * (rnd() + rnd() + rnd() - 1.5) / 0.5;
+  const gl = (v, g) => { if (v == null || !g) return null; const r = v / g; return r <= 0.85 ? 'A' : r <= 1.15 ? 'B' : r <= 1.4 ? 'C' : 'D'; };
+  const CAUSES = [['lower-left', 'トリガースラップ・握り込みすぎ'], ['down', '突き出し・銃口下がり'], ['left', '指のかかりが浅い'], ['right', '指掛け過剰・サミング'], ['up-right', '反動予期'], ['up', '銃口上がり・押し込み'], ['lower-right', '引き金を引きながら握り込み']];
+  const people = [['S101', '見本 一郎', '1班', 0.9, 0], ['S102', '見本 二郎', '1班', 1.15, 1], ['S103', '見本 三郎', '1班', 1.0, 0],
+    ['S201', '見本 四郎', '2班', 1.35, 0], ['S202', '見本 五郎', '2班', 0.95, 4], ['S203', '見本 六郎', '2班', 1.1, 1],
+    ['S301', '見本 七郎', '3班', 1.0, 2], ['S302', '見本 八郎', '3班', 1.25, 0], ['S303', '見本 九郎', '3班', 0.85, 3]];
+  const out = [], day = (d) => `2026-10-${String(d).padStart(2, '0')}`;
+  const SC = { posture: { key: 'posture', label: '至近射撃（姿勢変換）', goals: { first: 1.0, split: 2.0, total: 30, reload: 4.0 }, shots: 10, reloadAt: 7 },
+    suppress_day: { key: 'suppress_day', label: '制圧致命射撃（昼間）', goals: { first: 1.0, split: 0.8, total: 5 }, shots: 5, reloadAt: 0 } };
+  people.forEach(([code, name, han, skill, ci], pi) => {
+    const shooter = { code, name, unit: '1中隊/2小隊/' + han };
+    [5, 19].forEach((d, k) => Object.values(SC).forEach(sc => {
+      const imp = k ? 0.92 : 1, g = sc.goals, first = Math.max(0.5, nrm(g.first * skill * imp, 0.12)), split = Math.max(0.3, nrm(g.split * skill * imp, 0.15));
+      const total = first + split * (sc.shots - 1 - (sc.reloadAt ? 1 : 0)) + (sc.reloadAt ? g.reload * skill : 0);
+      const hits = Math.max(2, Math.min(sc.shots, Math.round(sc.shots * (1.15 - 0.35 * skill) + nrm(0, 0.8) + k * 0.6))), grp = Math.max(4, nrm(14 * skill, 2.5));
+      const reload = sc.reloadAt ? Math.max(1.5, nrm(g.reload * skill, 0.5)) : null, hg = hits / sc.shots >= 0.9 ? 'A' : hits / sc.shots >= 0.8 ? 'B' : hits / sc.shots >= 0.6 ? 'C' : 'D';
+      const t = []; let tt = first; for (let i = 0; i < sc.shots; i++) { t.push(+tt.toFixed(2)); tt += (sc.reloadAt && i + 1 === sc.reloadAt) ? reload + g.first : split; }
+      out.push({ id: `SAMPLE:MaLI:${code}:${sc.key}:${d}`, app: 'MaLI', type: 'live-session', shooter, start: day(d) + 'T01:00:00.000Z', eventName: '小隊射撃訓練', eventDate: day(d),
+        condition: { weapon: 'live', gun: '9mm拳銃', scenario: { key: sc.key, label: sc.label, type: 'string' }, rangesM: [], night: false },
+        summary: { shots: sc.shots, hits, groupingCm: +grp.toFixed(1), firstS: +first.toFixed(2), splitS: +split.toFixed(2), totalS: +total.toFixed(2), reloadS: reload && +reload.toFixed(2), reloadMeasured: true,
+          goals: { firstS: g.first, splitS: g.split, totalS: g.total, reloadS: g.reload || null, hits: null, groupingCm: 15 },
+          grades: { first: gl(first, g.first), split: gl(split, g.split), total: gl(total, g.total), reload: gl(reload, g.reload), hits: hg, grouping: gl(grp, 15), headshot: sc.key === 'suppress_day' ? (rnd() < 0.7 ? 'A' : 'D') : null, exposure: sc.key === 'posture' ? (skill < 1.1 ? 'B' : 'C') : null } },
+        shots: t.map((x, i) => ({ n: i + 1, tS: x, splitS: i ? +(x - t[i - 1]).toFixed(2) : null, target: null, rangeM: null })), actions: [] });
+    }));
+    // MaCo 自由練成（ドライ）2回、至近射撃（ドライ）1回、1コ的 1回
+    const mkShots = (n, base) => Array.from({ length: n }, (_, i) => { const sc = Math.max(5, Math.min(100, nrm(base, 12))), band = sc >= 88 ? '高' : sc >= 72 ? '中' : '低';
+      const c = band === '高' ? (rnd() < 0.5 ? ['none', '問題なし'] : CAUSES[ci]) : rnd() < 0.6 ? CAUSES[ci] : rnd() < 0.5 ? ['small', '動きが小さく、方向の特徴なし'] : CAUSES[Math.floor(rnd() * CAUSES.length)];
+      return { n: i + 1, score: +sc.toFixed(1), band, quality: rnd() < 0.05 ? 'suspect' : 'ok', cause: { key: c[0], label: c[1] }, cantDeg: +nrm(0, 1.5).toFixed(1) }; });
+    [8, 15].forEach((d, k) => { const base = 100 - 28 * (skill - 0.75) + k * 3, sh = mkShots(20, base), ok = sh.filter(s => s.quality === 'ok'), m = avg(ok.map(s => s.score));
+      out.push({ id: `SAMPLE:MaCo:${code}:free:${d}`, app: 'MaCo', type: 'free', shooter, start: day(d) + 'T09:00:00.000Z', eventName: '', eventDate: day(d),
+        condition: { weapon: 'dry', gun: pi % 2 ? 'Glock17' : 'VP9', scenario: { key: 'free', label: '自由練成', type: 'free' }, rangesM: null, night: null },
+        summary: { shots: 20, scored: ok.length, suspect: 20 - ok.length, scoreMean: +m.toFixed(1), scoreSd: +Math.sqrt(avg(ok.map(s => (s.score - m) ** 2))).toFixed(1),
+          bands: { high: ok.filter(s => s.band === '高').length, mid: ok.filter(s => s.band === '中').length, low: ok.filter(s => s.band === '低').length }, causeCounts: {}, cantMeanDeg: +nrm(pi === 3 ? 3.5 : 0.5, 0.8).toFixed(1) },
+        shots: sh, actions: [] }); });
+    { const g = { first: 1.0, split: 3.5, total: 42, reload: 4.0 }, base = 100 - 30 * (skill - 0.75), sh = mkShots(10, base), first = nrm(1.3 * skill, 0.15), split = nrm(3.4 * skill, 0.3), total = first + split * 8 + 4.5 * skill;
+      const ok = sh.filter(s => s.quality === 'ok');
+      out.push({ id: `SAMPLE:MaCo:${code}:m_posture:12`, app: 'MaCo', type: 'drill', shooter, start: day(12) + 'T09:00:00.000Z', eventName: '', eventDate: day(12),
+        condition: { weapon: 'dry', gun: pi % 2 ? 'Glock17' : 'VP9', scenario: { key: 'm_posture', label: '至近射撃（姿勢変換）10発・ドライ', type: 'string' }, rangesM: null, night: null },
+        summary: { shots: 10, plannedShots: 10, scoreMean: +avg(ok.map(s => s.score)).toFixed(1), firstS: +first.toFixed(2), splitS: +split.toFixed(2), totalS: +total.toFixed(2), reloadS: +(4.5 * skill).toFixed(2), reloadMeasured: true,
+          goals: g, grades: { first: gl(first, g.first), split: gl(split, g.split), total: gl(total, g.total), reload: gl(4.5 * skill, g.reload) }, slideS: 1.5 },
+        shots: sh, actions: [] }); }
+    { const reps = 4, inTime = Math.max(1, Math.min(4, Math.round(4.6 - skill * 1.2 + nrm(0, 0.5)))), sh = mkShots(reps, 100 - 30 * (skill - 0.75));
+      out.push({ id: `SAMPLE:MaCo:${code}:t1:15`, app: 'MaCo', type: 'drill', shooter, start: day(15) + 'T10:00:00.000Z', eventName: '', eventDate: day(15),
+        condition: { weapon: 'dry', gun: pi % 2 ? 'Glock17' : 'VP9', scenario: { key: 't1', label: '1コ的（3秒×4発）・ドライ', type: 'repeat' }, rangesM: null, night: null },
+        summary: { reps, shots: reps, inTime, scoreMean: +avg(sh.map(s => s.score)).toFixed(1), reactMeanS: +nrm(2.0 * skill, 0.2).toFixed(2), reactMaxS: +nrm(2.6 * skill, 0.2).toFixed(2), cantMaxDeg: +nrm(pi === 3 ? 4.2 : 1.6, 0.6).toFixed(1), parS: 3, restS: 5 },
+        shots: sh, actions: [] }); }
+  });
+  return out;
+}
+
+// ===== 初期化 =====
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => showView(b.dataset.v));
+$('unitSel').onchange = (e) => { unitSel = e.target.value; lsSet('masal_unit', unitSel); render(); };
+$('dFrom').onchange = (e) => { dFrom = e.target.value; lsSet('masal_from', dFrom); render(); };
+$('dTo').onchange = (e) => { dTo = e.target.value; lsSet('masal_to', dTo); render(); };
+$('btnPick').onclick = () => $('fileIn').click();
+$('fileIn').onchange = (e) => { const f = [...e.target.files]; e.target.value = ''; if (f.length) importFiles(f); };
+const drop = $('drop');
+['dragenter', 'dragover'].forEach(n => drop.addEventListener(n, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(n => drop.addEventListener(n, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => { const f = [...(e.dataTransfer && e.dataTransfer.files || [])].filter(x => /\.json$/i.test(x.name) || x.type === 'application/json'); if (f.length) importFiles(f); });
+$('btnExportJson').onclick = exportJson; $('btnExportCsv').onclick = exportCsv;
+$('exShare').onclick = exShare; $('exDl').onclick = exDownload; $('exCopy').onclick = exCopy; $('exClose').onclick = () => { $('exSheet').hidden = true; pending = null; };
+$('btnClear').onclick = () => {
+  if (sampleMode || !records.size) { $('clearConfirm').innerHTML = '<p class="hint">削除する記録はありません。</p>'; return; }
+  $('clearConfirm').innerHTML = `<div class="confirm">${records.size}件をこの端末から削除します。<button class="danger" id="btnClearYes">削除する</button><button id="btnClearNo">やめる</button></div>`;
+  $('btnClearNo').onclick = () => { $('clearConfirm').innerHTML = ''; };
+  $('btnClearYes').onclick = async () => { await DB.clear(); records.clear(); $('clearConfirm').innerHTML = ''; $('importLog').textContent = 'すべて削除しました。'; startSample(); render(); };
+};
+function startSample() { sampleMode = true; makeSample().forEach(r => records.set(r.id, r)); }
+(async () => {
+  $('dFrom').value = dFrom; $('dTo').value = dTo;
+  await DB.open();
+  ((await DB.all()) || []).forEach(r => records.set(r.id, r));
+  if (!records.size) startSample();
+  showView(['vUnit', 'vPerson', 'vImport'].includes(view) ? view : 'vUnit');
+})();
+</script>
+</body>
+</html>
