@@ -261,7 +261,8 @@ function extract(r) {
     o._goals = { first: go.first, split: go.split, total: go.total, reload: go.reload };
   } else if (r.type === 'drill') {                                 // MaCo 反復（1コ的・3コ的など）
     o.score = mk(s.scoreMean, null, scoreSt(num(s.scoreMean)));
-    const it = s.reps ? s.inTime / s.reps * 100 : null; o.inTime = mk(it, null, it == null ? null : it >= 100 ? 0 : it >= 75 ? 1 : 2, s.reps ? `${s.inTime}/${s.reps}` : null);
+    const pl = s.plannedShots || s.reps; // 1回に複数発の練成（MaCo 2026-10-29）は規定の発数＝回数×発数
+    const it = pl ? s.inTime / pl * 100 : null; o.inTime = mk(it, null, it == null ? null : it >= 100 ? 0 : it >= 75 ? 1 : 2, pl ? `${s.inTime}/${pl}` : null);
     o.react = mk(s.reactMeanS); const c = num(s.cantMaxDeg); o.cant = mk(c == null ? null : Math.abs(c), null, c == null ? null : Math.abs(c) >= 3 ? 1 : 0);
     o._goals = { react: s.parS };
   } else {                                                         // MaCo 自由練成

@@ -61,6 +61,7 @@ shots, plannedShots, scoreMean（予測点の平均。時間外・連射・要�
 ### MaCo drill（repeat：1コ的・3コ的など）
 
 reps, shots, inTime, scoreMean, reactMeanS, reactMaxS, cantMaxDeg, parS, restS
+（MaCo 2026-10-29 以降、1回に複数発の練成では次も出力：perRep＝1回の発数、plannedShots＝規定の発数（reps×perRep）、fullReps＝全弾時間内の回数、lastMeanS＝最終弾までの平均、splitMeanS＝発の間隔の平均。各発の k＝同じ回の何発目か。reactMeanS・reactMaxS は各回の1発目。時間内率は inTime ÷ plannedShots（無ければ reps））
 
 ### MaCo free
 
